@@ -8,13 +8,11 @@ import TasksNav from "./components/TasksNav";
 
 function App() {
     const [input, setInput] = useState("");
+    const [priority, setPriority] = useState("medium");
     const [tasks, setTasks] = useState([]);
-    const [showedTasks, setShowedTasks] = useState([]);
     const [filter, setFilter] = useState("all");
-
-    useEffect(() => {
-        setShowedTasks(tasks);
-    }, [tasks]);
+    const [priorityFilter, setPriorityFilter] = useState("all");
+    const [prioritySort, setPrioritySort] = useState("none");
 
     useEffect(() => {
         if (tasks.length !== 0)
@@ -24,7 +22,12 @@ function App() {
     useEffect(() => {
         const storedTasks = localStorage.getItem("tasks");
         if (storedTasks) {
-            setTasks(JSON.parse(storedTasks));
+            setTasks(
+                JSON.parse(storedTasks).map((task) => ({
+                    ...task,
+                    priority: task.priority || "medium",
+                }))
+            );
         }
     }, []);
 
@@ -40,6 +43,16 @@ function App() {
         );
     };
 
+    const updatePriority = (id, selectedPriority) => {
+        setTasks((prev) =>
+            prev.map((task) =>
+                task.id === id
+                    ? { ...task, priority: selectedPriority }
+                    : task
+            )
+        );
+    };
+
     const deleteTask = (index) => {
         setTasks((prev) => {
             return prev.filter(({ id }) => id !== index);
@@ -50,7 +63,7 @@ function App() {
         if (input !== "") {
             setTasks((prev) => [
                 ...prev,
-                { id: nanoid(), task: input, isDone: false },
+                { id: nanoid(), task: input, isDone: false, priority },
             ]);
             setInput("");
         }
@@ -60,16 +73,6 @@ function App() {
         setTasks([]);
         localStorage.removeItem("tasks");
     };
-
-    useEffect(() => {
-        if (filter === "all") {
-            setShowedTasks(tasks);
-        } else if (filter === "completed") {
-            setShowedTasks(tasks.filter((task) => task.isDone));
-        } else if (filter === "pending") {
-            setShowedTasks(tasks.filter((task) => !task.isDone));
-        }
-    }, [tasks, filter]);
 
     const handleFilter = (selectedFilter) => {
         setFilter(selectedFilter);
@@ -81,13 +84,40 @@ function App() {
         }
     }
 
-    const taskArray = showedTasks.map(({ id, task, isDone }) => {
+    const priorityRank = { high: 3, medium: 2, low: 1 };
+    const showedTasks = tasks
+        .filter((task) => {
+            const matchesStatus =
+                filter === "all" ||
+                (filter === "completed" && task.isDone) ||
+                (filter === "pending" && !task.isDone);
+            const matchesPriority =
+                priorityFilter === "all" ||
+                task.priority === priorityFilter;
+
+            return matchesStatus && matchesPriority;
+        })
+        .sort((a, b) => {
+            if (prioritySort === "high") {
+                return priorityRank[b.priority] - priorityRank[a.priority];
+            }
+            if (prioritySort === "low") {
+                return priorityRank[a.priority] - priorityRank[b.priority];
+            }
+            return 0;
+        });
+
+    const taskArray = showedTasks.map(({ id, task, isDone, priority }) => {
         return (
             <Task
                 key={id}
                 task={task}
                 isDone={isDone}
+                priority={priority}
                 updateTask={() => updateTask(id)}
+                updatePriority={(selectedPriority) =>
+                    updatePriority(id, selectedPriority)
+                }
                 deleteTask={() => deleteTask(id)}
             />
         );
@@ -99,6 +129,8 @@ function App() {
                 <Title />
                 <TaskInput
                     input={input}
+                    priority={priority}
+                    setPriority={setPriority}
                     add={addTask}
                     handleKeyPress={handleKeyPress}
                     handleChange={handleChange}
@@ -110,6 +142,10 @@ function App() {
                         all={() => handleFilter("all")}
                         pending={() => handleFilter("pending")}
                         completed={() => handleFilter("completed")}
+                        priorityFilter={priorityFilter}
+                        setPriorityFilter={setPriorityFilter}
+                        prioritySort={prioritySort}
+                        setPrioritySort={setPrioritySort}
                     />
                     <EmptyTasks
                         show={showedTasks.length === 0}
